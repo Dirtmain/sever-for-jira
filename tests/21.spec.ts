@@ -19,4 +19,4 @@
 
   // or using expect:
   // expect(price, 'Too expensive!').toBeLessThanOrEqual(40);
-}); /*
+}); */
