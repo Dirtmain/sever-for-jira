@@ -1,0 +1,163 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - main [ref=e3]:
+    - generic [ref=e5]:
+      - button "Otwórz menu" [ref=e8] [cursor=pointer]: Menu
+      - link [ref=e14] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e16]:
+        - generic [ref=e19]:
+          - link "Połącz z tłumaczem" [ref=e20] [cursor=pointer]:
+            - /url: https://tlumacz.migam.org/miasto_bydgoszcz
+            - text: Połącz z tłumaczem
+          - button "Włącz wysoki kontrast" [ref=e22] [cursor=pointer]: Kontrast
+          - generic [ref=e24]:
+            - generic [ref=e25]: Wielkość czcionki
+            - generic [ref=e26]:
+              - button "A" [pressed] [ref=e27] [cursor=pointer]
+              - button "A" [ref=e28] [cursor=pointer]
+          - combobox [ref=e29]:
+            - button "Otwórz menu" [ref=e30] [cursor=pointer]:
+              - text: Język
+              - generic [ref=e32]: pl
+        - generic [ref=e33]:
+          - link [ref=e35] [cursor=pointer]:
+            - /url: /wyszukiwanie/
+          - button "Zaloguj / Zarejestruj" [ref=e38]:
+            - generic [ref=e39]: Zaloguj / Zarejestruj
+    - generic [ref=e41]:
+      - navigation "breadcrumb" [ref=e43]:
+        - list [ref=e44]:
+          - listitem [ref=e45]:
+            - link "Bydgoska Platforma Miejska" [ref=e46] [cursor=pointer]:
+              - /url: /
+          - listitem [ref=e47]: Katalog usług
+      - generic [ref=e48]:
+        - generic [ref=e49]: Katalog usług
+        - generic [ref=e50]: Załatw sprawę przez Internet lub w Urzędzie
+        - textbox "Wpisz nazwę lub słowo kluczowe" [ref=e53]
+      - generic:
+        - img [ref=e54]
+        - img [ref=e55]
+        - img [ref=e56]
+        - img [ref=e57]
+    - generic [ref=e59]:
+      - generic [ref=e60]:
+        - generic [ref=e62]:
+          - link "Według kategorii" [active] [ref=e63] [cursor=pointer]:
+            - /url: /katalog-uslug/kategorie/
+            - generic [ref=e65]: Według kategorii
+          - link "Według alfabetu" [ref=e66] [cursor=pointer]:
+            - /url: /katalog-uslug/alfabet/
+            - generic [ref=e68]: Według alfabetu
+          - link "Według wydziału" [ref=e69] [cursor=pointer]:
+            - /url: /katalog-uslug/wydzial/
+            - generic [ref=e71]: Według wydziału
+        - generic [ref=e72]:
+          - button "Rozwiń usługi" [ref=e74]
+          - generic [ref=e75]:
+            - heading "Środowisko i zwierzęta" [level=2] [ref=e78]:
+              - button "Środowisko i zwierzęta" [ref=e79] [cursor=pointer]:
+                - generic [ref=e81]: Środowisko i zwierzęta
+            - heading "Podatki i opłaty" [level=2] [ref=e84]:
+              - button "Podatki i opłaty" [ref=e85] [cursor=pointer]:
+                - generic [ref=e87]: Podatki i opłaty
+            - heading "Zdrowie, świadczenia i pomoc społeczna" [level=2] [ref=e90]:
+              - button "Zdrowie, świadczenia i pomoc społeczna" [ref=e91] [cursor=pointer]:
+                - generic [ref=e93]: Zdrowie, świadczenia i pomoc społeczna
+            - heading "Budownictwo i Architektura" [level=2] [ref=e96]:
+              - button "Budownictwo i Architektura" [ref=e97] [cursor=pointer]:
+                - generic [ref=e99]: Budownictwo i Architektura
+            - heading "Odpady komunalne" [level=2] [ref=e102]:
+              - button "Odpady komunalne" [ref=e103] [cursor=pointer]:
+                - generic [ref=e105]: Odpady komunalne
+            - heading "Kierowcy, pojazdy i komunikacja" [level=2] [ref=e108]:
+              - button "Kierowcy, pojazdy i komunikacja" [ref=e109] [cursor=pointer]:
+                - generic [ref=e111]: Kierowcy, pojazdy i komunikacja
+            - heading "Działalność gospodarcza" [level=2] [ref=e114]:
+              - button "Działalność gospodarcza" [ref=e115] [cursor=pointer]:
+                - generic [ref=e117]: Działalność gospodarcza
+            - heading "Sprawy obywatelskie" [level=2] [ref=e120]:
+              - button "Sprawy obywatelskie" [ref=e121] [cursor=pointer]:
+                - generic [ref=e123]: Sprawy obywatelskie
+            - heading "Kultura, sport i edukacja" [level=2] [ref=e126]:
+              - button "Kultura, sport i edukacja" [ref=e127] [cursor=pointer]:
+                - generic [ref=e129]: Kultura, sport i edukacja
+            - heading "Imprezy i zgromadzenia" [level=2] [ref=e132]:
+              - button "Imprezy i zgromadzenia" [ref=e133] [cursor=pointer]:
+                - generic [ref=e135]: Imprezy i zgromadzenia
+            - heading "Społeczeństwo obywatelskie" [level=2] [ref=e138]:
+              - button "Społeczeństwo obywatelskie" [ref=e139] [cursor=pointer]:
+                - generic [ref=e141]: Społeczeństwo obywatelskie
+      - generic [ref=e143]:
+        - generic [ref=e144]: Liczba usług:255
+        - generic [ref=e145]:
+          - generic [ref=e146]: "Sposób realizacji usługi:"
+          - generic [ref=e147]: "Zaznacz lub odznacz sposób w jaki chcesz załatwić sprawę.:"
+          - generic [ref=e149]:
+            - generic [ref=e150]:
+              - checkbox "gov.pl"
+              - generic [ref=e151] [cursor=pointer]: gov.pl
+            - generic [ref=e153]:
+              - checkbox "ePuap"
+              - generic [ref=e154] [cursor=pointer]: ePuap
+            - generic [ref=e156]:
+              - checkbox "Opłaty Urzędowe"
+              - generic [ref=e157] [cursor=pointer]: Opłaty Urzędowe
+            - generic [ref=e159]:
+              - checkbox "Emp@tia"
+              - generic [ref=e160] [cursor=pointer]: Emp@tia
+            - generic [ref=e162]:
+              - checkbox "Umów się na wizytę w Urzędzie"
+              - generic [ref=e163] [cursor=pointer]: Umów się na wizytę w Urzędzie
+            - generic [ref=e165]:
+              - checkbox "Platforma Miejska"
+              - generic [ref=e166] [cursor=pointer]: Platforma Miejska
+            - generic [ref=e168]:
+              - checkbox "ESP PiK"
+              - generic [ref=e169] [cursor=pointer]: ESP PiK
+    - generic [ref=e172]:
+      - generic [ref=e173]:
+        - img "Platforma Miejska" [ref=e175]
+        - generic [ref=e176]: Aktualna wersja serwisu 2.1.4
+        - generic [ref=e177]: Platformę Miejską dostarcza O4B Sp. z o.o.
+      - generic [ref=e178]:
+        - generic [ref=e181]:
+          - text: "Urząd Miasta Bydgoszczy, ul. Jezuicka 1, 85-102 Bydgoszcz, tel.: +48 52 58 58 913, fax: +48 52 58 58 623 Chcesz zgłosić błąd lub sugestię wyślij email:"
+          - link "info@pm.bydgoszcz.pl" [ref=e182] [cursor=pointer]:
+            - /url: mailto:info@pm.bydgoszcz.pl
+        - navigation [ref=e183]:
+          - list [ref=e184]:
+            - listitem [ref=e185]:
+              - link "Regulamin" [ref=e186] [cursor=pointer]:
+                - /url: https://test-cdn.pm.bydgoszcz.pl/resources/files/consents/tenants/mnp_bydgoszcz/pl/REGULAMINY.REGULAMIN.DOKUMENT.pdf
+                - generic [ref=e188]: Regulamin
+            - listitem [ref=e189]:
+              - link "Mapa Serwisu" [ref=e190] [cursor=pointer]:
+                - /url: /mapa-strony/
+                - generic [ref=e192]: Mapa Serwisu
+            - listitem [ref=e193]:
+              - link "Deklaracja Dostępności" [ref=e194] [cursor=pointer]:
+                - /url: /deklaracja-dostepnosci/
+                - generic [ref=e196]: Deklaracja Dostępności
+            - listitem [ref=e197]:
+              - link "Zgłoś błąd" [ref=e198] [cursor=pointer]:
+                - /url: https://test-portal.pm.bydgoszcz.pl/formularz-kontaktowy
+                - generic [ref=e200]: Zgłoś błąd
+      - generic [ref=e202]:
+        - link "facebook.svg" [ref=e203] [cursor=pointer]:
+          - /url: https://www.facebook.com/bydgoszczpl/
+          - img "facebook.svg" [ref=e204]
+        - link "icon-footer-x2.svg" [ref=e205] [cursor=pointer]:
+          - /url: https://twitter.com/BydgoszczPL
+          - img "icon-footer-x2.svg" [ref=e206]
+        - link "instagram.svg" [ref=e207] [cursor=pointer]:
+          - /url: https://instagram.com/bydgoszcz.pl/
+          - img "instagram.svg" [ref=e208]
+        - link "youtube.svg" [ref=e209] [cursor=pointer]:
+          - /url: https://www.youtube.com/wwwbydgoszczpl
+          - img "youtube.svg" [ref=e210]
+  - alert [ref=e215]
+```
