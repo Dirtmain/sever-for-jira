@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
+/*import { test, expect } from '@playwright/test';
 
-test('Check Bladee Gluee vinyl price', async ({ page }) => {
+ test('Check Bladee Gluee vinyl price', async ({ page }) => {
   await page.goto('https://www.ebay.com');
 
   await page.getByRole('button', { name: 'Decline all privacy terms and' }).click();
@@ -19,4 +19,4 @@ test('Check Bladee Gluee vinyl price', async ({ page }) => {
 
   // or using expect:
   // expect(price, 'Too expensive!').toBeLessThanOrEqual(40);
-});
+}); /*

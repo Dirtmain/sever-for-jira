@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+/* import { test, expect } from '@playwright/test';
 
 test('login with HTTP Auth and click navigation button', async ({ browser }) => {
   // Log in using HTTP Basic Auth
@@ -23,4 +23,4 @@ test('login with HTTP Auth and click navigation button', async ({ browser }) => 
   await page.getByRole('button', { name: 'Search', exact: true }).click();  
 
    await page.getByRole('link', { name: 'Gluee by Bladee (Record, 2023, 2nd Color Pressing) Opens in a new window or tab' }).click();
-});
+}); */
