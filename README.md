@@ -1,2 +1,1 @@
-"# sever-for-jira" 
-"# sever-for-jira" 
+this was made for an internship!
