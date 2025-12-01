@@ -11,8 +11,9 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
+      
       - uses: actions/checkout@v5
-
+      
       - uses: actions/setup-node@v5
         with:
           node-version: lts/*
@@ -26,7 +27,6 @@ jobs:
       - name: Run Playwright tests
         run: npx playwright test 67.spec.ts
 
-      # Upload JUnit XML results
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -34,10 +34,31 @@ jobs:
           path: test-results/results.xml
           retention-days: 30
 
-      # Optional: Upload HTML report (requires adding 'html' reporter in config)
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
+      - name: Create Jira Test Execution
+        id: create_test_exec
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          echo "Creating Jira Test Execution..."
+          TEST_EXEC_KEY=$(curl -s -u $JIRA_EMAIL:$JIRA_API_TOKEN \
+            -X POST -H "Content-Type: application/json" \
+            --data '{"fields":{"project":{"key":"ECS"},"summary":"Automated Playwright Execution"}}' \
+            $JIRA_BASE_URL/rest/api/2/issue | jq -r '.key')
+          echo "TEST_EXEC_KEY=$TEST_EXEC_KEY" >> $GITHUB_ENV
+
+      - name: Publish test results to Jira RTM
+        if: ${{ always() }}
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          TEST_EXEC_KEY: ${{ env.TEST_EXEC_KEY }}
+        run: |
+          echo "Uploading Playwright JUnit results to Jira Test Execution $TEST_EXEC_KEY..."
+          curl -u $JIRA_EMAIL:$JIRA_API_TOKEN \
+            -H "Content-Type: multipart/form-data" \
+            -F "file=@test-results/results.xml" \
+            -F "testExecKey=$TEST_EXEC_KEY" \
+            $JIRA_BASE_URL/rest/raven/1.0/import/execution/junit
