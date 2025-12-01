@@ -1,0 +1,14 @@
+<testsuites id="" name="" tests="3" failures="0" skipped="0" errors="0" time="10.890776">
+<testsuite name="67.spec.ts" timestamp="2025-12-01T10:08:08.699Z" hostname="chromium" tests="1" failures="0" skipped="0" time="8.465" errors="0">
+<testcase name="login with HTTP Auth and verify liczba usług" classname="67.spec.ts" time="8.465">
+</testcase>
+</testsuite>
+<testsuite name="67.spec.ts" timestamp="2025-12-01T10:08:08.699Z" hostname="firefox" tests="1" failures="0" skipped="0" time="8.812" errors="0">
+<testcase name="login with HTTP Auth and verify liczba usług" classname="67.spec.ts" time="8.812">
+</testcase>
+</testsuite>
+<testsuite name="67.spec.ts" timestamp="2025-12-01T10:08:08.699Z" hostname="webkit" tests="1" failures="0" skipped="0" time="10.108" errors="0">
+<testcase name="login with HTTP Auth and verify liczba usług" classname="67.spec.ts" time="10.108">
+</testcase>
+</testsuite>
+</testsuites>
