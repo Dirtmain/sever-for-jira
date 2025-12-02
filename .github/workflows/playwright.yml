@@ -1,4 +1,4 @@
-name: Playwright → RTM for Jira
+name: Playwright → RTM for Jira 2 
 
 on:
   workflow_dispatch:
