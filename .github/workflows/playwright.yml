@@ -32,7 +32,7 @@ jobs:
         run: |
           mkdir -p test-artifacts
           # JSON report -> test-reporter.json
-          npx playwright test --reporter="json=test-reporter.json" --output=test-artifacts
+          npx playwright test --reporter="json,test-reporter.json" --output=test-artifacts
 
       - name: Ensure jq and curl are available
         run: |
