@@ -1,3 +1,5 @@
+name: Playwright → RTM for Jira
+
 on:
   workflow_dispatch:
   push:
@@ -21,17 +23,21 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install deps
+      - name: Install dependencies and Playwright browsers
         run: |
           npm ci
-          npx playwright install
+          npx playwright install --with-deps
 
-      - name: Run Playwright (JSON report + artifacts)
+      - name: Run Playwright with JSON reporter
         run: |
           mkdir -p test-artifacts
-          npx playwright test \
-            --reporter=json,test-reporter.json \
-            --output=test-artifacts
+          # JSON report -> test-reporter.json
+          npx playwright test --reporter="json=test-reporter.json" --output=test-artifacts
+
+      - name: Ensure jq and curl are available
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
 
       - name: Create RTM Test Execution
         id: create_te
@@ -55,25 +61,26 @@ jobs:
           fi
           echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
 
-      - name: Upload Playwright artifacts to Test Execution (optional)
+      - name: Upload Playwright artifacts to the Test Execution (optional)
         if: env.TE_KEY != ''
         shell: bash
         run: |
+          BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 -w 0)
+          # Upload JSON report
+          curl -sS -X POST "$JIRA_BASE_URL/rest/api/2/issue/$TE_KEY/attachments" \
+            -H "Authorization: Basic $BASIC" \
+            -H "X-Atlassian-Token: no-check" \
+            -F "file=@test-reporter.json;type=application/json" || true
+          # Upload screenshots/videos if present
           shopt -s nullglob
           files=(test-artifacts/**/*)
-          if [ ${#files[@]} -gt 0 ]; then
-            BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 -w 0)
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || continue
             curl -sS -X POST "$JIRA_BASE_URL/rest/api/2/issue/$TE_KEY/attachments" \
               -H "Authorization: Basic $BASIC" \
               -H "X-Atlassian-Token: no-check" \
-              -F "file=@test-reporter.json;type=application/json" || true
-            for f in "${files[@]}"; do
-              curl -sS -X POST "$JIRA_BASE_URL/rest/api/2/issue/$TE_KEY/attachments" \
-                -H "Authorization: Basic $BASIC" \
-                -H "X-Atlassian-Token: no-check" \
-                -F "file=@${f}" || true
-            done
-          fi
+              -F "file=@${f}" || true
+          done
 
       - name: Report Test Case Executions to RTM
         if: env.TE_KEY != ''
@@ -81,19 +88,21 @@ jobs:
         run: |
           BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 -w 0)
 
-          # Parse Playwright JSON. Expect @TC=KEY in test title.
+          # Parse Playwright JSON and post results to RTM.
+          # Expect @TC=KEY (e.g., @TC=WEB-TC-123) in test titles.
           jq -r '
+            def statusMap($s):
+              if $s=="passed" then "PASSED"
+              elif $s=="failed" then "FAILED"
+              elif $s=="skipped" or $s=="timedOut" then "BLOCKED"
+              else "TODO" end;
+
             .suites[]? as $s |
-            ($s.specs[]? | .tests[]?) as $t |
+            $s.specs[]? as $sp |
+            $sp.tests[]? as $t |
             {
               title: ($t.title // ""),
-              status: (
-                ([$t.results[]?.status] | first) as $st |
-                if $st=="passed" then "PASSED"
-                elif $st=="failed" then "FAILED"
-                elif $st=="skipped" or $st=="timedOut" then "BLOCKED"
-                else "TODO" end
-              ),
+              status: (statusMap(($t.results[0]?.status // "unknown"))),
               comment: (
                 ($t.results[]? | select(.status=="failed") | .error?.message) // ""
               )
@@ -104,7 +113,7 @@ jobs:
             STATUS=$(echo "$obj" | jq -r '.status')
             COMMENT=$(echo "$obj" | jq -r '.comment')
 
-            if [[ "$TITLE" =~ @TC=([A-Z0-9\-]+) ]]; then
+            if [[ "$TITLE" =~ @TC=([A-Z0-9][A-Z0-9_-]*-[A-Z0-9_-]+) ]]; then
               TC_KEY="${BASH_REMATCH[1]}"
             else
               echo "Skipping test without @TC=KEY tag: $TITLE"
@@ -115,18 +124,23 @@ jobs:
                         '{testCaseKey:$tc, testExecutionKey:$te, status:$st, comment:$cm}')
 
             echo "Posting result: $TC_KEY -> $STATUS"
-            curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
+            curl -sS -o /dev/null -w "%{http_code}\n" \
+              -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
               -H "Authorization: Basic $BASIC" \
               -H "Content-Type: application/json" \
-              -d "$payload" \
-              || echo "Failed to post result for $TC_KEY"
+              -d "$payload" | {
+                read code
+                if [ "$code" != "200" ] && [ "$code" != "201" ]; then
+                  echo "Failed to post result for $TC_KEY (HTTP $code)"
+                fi
+              }
           done
 
-      - name: Upload summary as job artifact
+      - name: Upload job outputs
         uses: actions/upload-artifact@v4
         with:
-          name: rtm-te-${{ env.TE_KEY }}
+          name: rtm-${{ env.TE_KEY }}
           path: |
             te.json
             test-reporter.json
-          if-no-files-found: ignore
+          if-no-files-found: warn
