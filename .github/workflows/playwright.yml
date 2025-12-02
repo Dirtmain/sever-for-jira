@@ -24,7 +24,7 @@ jobs:
       - name: Install deps
         run: |
           npm ci
-          npx playwright install --with-deps
+          npx playwright install
 
       - name: Run Playwright (JSON report + artifacts)
         run: |
