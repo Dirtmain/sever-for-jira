@@ -30,9 +30,8 @@ jobs:
 
       - name: Run Playwright with JSON reporter
         run: |
-          mkdir -p test-artifacts
-          # JSON report -> test-reporter.json
-          npx playwright test --reporter="json,test-reporter.json" --output=test-artifacts
+          export default defineConfig({
+            reporter:[['json', { outputFile:'test-artifacts/test-reporter.json' }], ['list']],
 
       - name: Ensure jq and curl are available
         run: |
