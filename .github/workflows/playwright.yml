@@ -1,45 +1,40 @@
-name: Playwright → RTM for Jira 2 
-
-on:
-  workflow_dispatch:
+name: Playwright → RTM for Jira 2
+'on':
+  workflow_dispatch: null
   push:
-    branches: [ main ]
-  pull_request:
-
+    branches:
+      - main
+  pull_request: null
 jobs:
   test-and-report:
     runs-on: ubuntu-latest
     env:
-      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-      JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+      JIRA_BASE_URL: '${{ secrets.JIRA_BASE_URL }}'
+      JIRA_EMAIL: '${{ secrets.JIRA_EMAIL }}'
+      JIRA_API_TOKEN: '${{ secrets.JIRA_API_TOKEN }}'
+      JIRA_PROJECT_KEY: '${{ secrets.JIRA_PROJECT_KEY }}'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: Install dependencies and Playwright browsers
         run: |
           npm ci
           npx playwright install --with-deps
-
       - name: Ensure jq and curl are available
         run: |
           sudo apt-get update
           sudo apt-get install -y jq curl
-
       - name: Create RTM Test Execution and Upload Playwright Results
   id: create_te
   shell: bash
   env:
-    JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-    JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-    JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+    JIRA_BASE_URL: '${{ secrets.JIRA_BASE_URL }}'
+    JIRA_EMAIL: '${{ secrets.JIRA_EMAIL }}'
+    JIRA_API_TOKEN: '${{ secrets.JIRA_API_TOKEN }}'
     JIRA_PROJECT_KEY: ECS
   run: |
     # Encode Basic Auth header
