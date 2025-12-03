@@ -40,14 +40,14 @@ jobs:
           BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 | tr -d '\n')
 
           body=$(jq -n --arg projectKey "$JIRA_PROJECT_KEY" \
-               --arg name "Playwright Run - ${GITHUB_RUN_NUMBER}" \
-               --arg desc "CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})" \
-               '{projectKey:$projectKey, name:$name, description:$desc}')
+                 --arg name "Playwright Run - ${GITHUB_RUN_NUMBER}" \
+                 --arg desc "CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})" \
+                 '{projectKey:$projectKey, name:$name, description:$desc}')
 
-          resp=$(curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
-             -H "Authorization: Basic $BASIC" \
-             -H "Content-Type: application/json" \
-             -d "$body")
+          resp=$(curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/1.0/testexecution" \
+                 -H "Authorization: Basic $BASIC" \
+                 -H "Content-Type: application/json" \
+                 -d "$body")
 
           echo "RAW RESPONSE:"
           echo "$resp"
@@ -63,26 +63,6 @@ jobs:
 
           echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
 
-           - name: Upload Playwright artifacts to the Test Execution (optional)
-            if: env.TE_KEY != ''
-           shell: bash
-          run: |
-          BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 -w 0)
-          # Upload JSON report
-          curl -sS -X POST "$JIRA_BASE_URL/rest/api/2/issue/$TE_KEY/attachments" \
-            -H "Authorization: Basic $BASIC" \
-            -H "X-Atlassian-Token: no-check" \
-            -F "file=@test-reporter.json,type=application/json" || true
-          # Upload screenshots/videos if present
-          shopt -s nullglob
-          files=(test-artifacts/**/*)
-          for f in "${files[@]}"; do
-            [ -f "$f" ] || continue
-            curl -sS -X POST "$JIRA_BASE_URL/rest/api/2/issue/$TE_KEY/attachments" \
-              -H "Authorization: Basic $BASIC" \
-              -H "X-Atlassian-Token: no-check" \
-              -F "file=@${f}" || true
-          done
 
       - name: Report Test Case Executions to RTM
         if: env.TE_KEY != ''
