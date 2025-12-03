@@ -30,7 +30,6 @@ jobs:
 
       - name: Run Playwright with JSON reporter
         run: |
-          export default defineConfig({
             reporter:[['json', { outputFile:'test-artifacts/test-reporter.json' }], ['list']],
 
       - name: Ensure jq and curl are available
