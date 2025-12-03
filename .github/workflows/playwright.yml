@@ -70,7 +70,7 @@ jobs:
           curl -sS -X POST "$JIRA_BASE_URL/rest/api/2/issue/$TE_KEY/attachments" \
             -H "Authorization: Basic $BASIC" \
             -H "X-Atlassian-Token: no-check" \
-            -F "file=@test-reporter.json;type=application/json" || true
+            -F "file=@test-reporter.json,type=application/json" || true
           # Upload screenshots/videos if present
           shopt -s nullglob
           files=(test-artifacts/**/*)
