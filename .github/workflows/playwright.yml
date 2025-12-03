@@ -33,35 +33,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq curl
 
-      - name: Create RTM Test Execution
-        id: create_te
-        shell: bash
-        run: |
-          BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 | tr -d '\n')
+      - name: Import Playwright JSON to RTM Cloud
+  id: create_te
+  shell: bash
+  run: |
+    resp=$(curl -sS -X POST "$JIRA_BASE_URL/plugins/servlet/rtm/rest/api/automation/import-test-results" \
+      -H "Authorization: Bearer $RTM_API_TOKEN" \
+      -F "projectKey=$JIRA_PROJECT_KEY" \
+      -F "reportType=JUNIT" \
+      -F "file=@test-artifacts/test-reporter.json")
 
-          body=$(jq -n --arg projectKey "$JIRA_PROJECT_KEY" \
-                 --arg name "Playwright Run - ${GITHUB_RUN_NUMBER}" \
-                 --arg desc "CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})" \
-                 '{projectKey:$projectKey, name:$name, description:$desc}')
+    echo "RAW RESPONSE:"
+    echo "$resp" | tee te.json
 
-          resp=$(curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/1.0/testexecution" \
-                 -H "Authorization: Basic $BASIC" \
-                 -H "Content-Type: application/json" \
-                 -d "$body")
+    TE_KEY=$(jq -r '.key // empty' te.json)
+    if [ -z "$TE_KEY" ]; then
+      echo "Failed to create Test Execution. Response:"
+      cat te.json
+      exit 1
+    fi
 
-          echo "RAW RESPONSE:"
-          echo "$resp"
+    echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
 
-          echo "$resp" | tee te.json
-
-          TE_KEY=$(jq -r '.key // empty' te.json)
-          if [ -z "$TE_KEY" ]; then
-          echo "Failed to create Test Execution. Response:"
-          cat te.json
-          exit 1
-          fi
-
-          echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
 
 
       - name: Report Test Case Executions to RTM
