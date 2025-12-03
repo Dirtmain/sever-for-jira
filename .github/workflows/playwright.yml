@@ -34,26 +34,26 @@ jobs:
           sudo apt-get install -y jq curl
 
       - name: Import Playwright JSON to RTM Cloud
-  id: create_te
-  shell: bash
-  run: |
-    resp=$(curl -sS -X POST "$JIRA_BASE_URL/plugins/servlet/rtm/rest/api/automation/import-test-results" \
-      -H "Authorization: Bearer $RTM_API_TOKEN" \
-      -F "projectKey=$JIRA_PROJECT_KEY" \
-      -F "reportType=JUNIT" \
-      -F "file=@test-artifacts/test-reporter.json")
+        id: create_te
+        shell: bash
+        run: |
+          resp=$(curl -sS -X POST "$JIRA_BASE_URL/plugins/servlet/rtm/rest/api/automation/import-test-results" \
+          -H "Authorization: Bearer $RTM_API_TOKEN" \
+          -F "projectKey=$JIRA_PROJECT_KEY" \
+          -F "reportType=JUNIT" \
+          -F "file=@test-artifacts/test-reporter.json")
 
-    echo "RAW RESPONSE:"
-    echo "$resp" | tee te.json
+          echo "RAW RESPONSE:"
+          echo "$resp" | tee te.json
 
-    TE_KEY=$(jq -r '.key // empty' te.json)
-    if [ -z "$TE_KEY" ]; then
-      echo "Failed to create Test Execution. Response:"
-      cat te.json
-      exit 1
-    fi
+          TE_KEY=$(jq -r '.key // empty' te.json)
+          if [ -z "$TE_KEY" ]; then
+            echo "Failed to create Test Execution. Response:"
+            cat te.json
+            exit 1
+          fi
 
-    echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
+          echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
 
 
 
@@ -119,4 +119,4 @@ jobs:
           path: |
             te.json
             test-reporter.json
-          if-no-files-found: warn
+            if-no-files-found: warn
