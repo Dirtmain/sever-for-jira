@@ -28,10 +28,6 @@ jobs:
           npm ci
           npx playwright install --with-deps
 
-      - name: Run Playwright with JSON reporter
-        run: |
-            reporter:[['json', { outputFile:'test-artifacts/test-reporter.json' }], ['list']],
-
       - name: Ensure jq and curl are available
         run: |
           sudo apt-get update
