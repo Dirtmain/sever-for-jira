@@ -37,7 +37,7 @@ jobs:
   id: create_te
   shell: bash
   env:
-    JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}   # e.g., https://szymonn760.atlassian.net
+    JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
     JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
     JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
     JIRA_PROJECT_KEY: ECS
@@ -48,7 +48,7 @@ jobs:
     # Create Test Execution
     TE_NAME="Playwright Run - ${GITHUB_RUN_NUMBER}"
     TE_DESC="CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})"
-    
+
     TE_RESP=$(curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
       -H "Authorization: Basic $BASIC" \
       -H "Content-Type: application/json" \
@@ -72,19 +72,17 @@ jobs:
       exit 1
     fi
 
-    # Loop through Playwright test results
+    # Loop through Playwright test results and post to RTM
     jq -c '.tests[]' test-artifacts/test-reporter.json | while read test; do
       NAME=$(echo "$test" | jq -r '.title | join(" ")')
       STATUS=$(echo "$test" | jq -r '.status' | awk '{print toupper($0)}')  # PASSED / FAILED / SKIPPED
-      TESTCASE_KEY=$(echo "$test" | jq -r '.annotations[]? | select(.type=="testCaseKey") | .value')  # optional mapping if you annotate test case keys
+      TESTCASE_KEY=$(echo "$test" | jq -r '.annotations[]? | select(.type=="testCaseKey") | .value')
 
-      # Skip if no Test Case key
       if [ -z "$TESTCASE_KEY" ]; then
         echo "Skipping test \"$NAME\" because no testCaseKey annotation found."
         continue
       fi
 
-      # Post result to RTM
       curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
         -H "Authorization: Basic $BASIC" \
         -H "Content-Type: application/json" \
