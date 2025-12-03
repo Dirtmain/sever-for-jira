@@ -41,7 +41,7 @@ jobs:
           -H "Authorization: Bearer $RTM_API_TOKEN" \
           -F "projectKey=$JIRA_PROJECT_KEY" \
           -F "reportType=JUNIT" \
-          -F "file=@test-artifacts/test-reporter.json")
+          -F "file=@test-results/results.xml") \
 
           echo "RAW RESPONSE:"
           echo "$resp" | tee te.json
