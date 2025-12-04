@@ -4,7 +4,7 @@ on:
   workflow_dispatch: null
   push:
     branches:
-      - main
+    - main
   pull_request: null
 
 jobs:
@@ -16,25 +16,25 @@ jobs:
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
       JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
-      - name: Install dependencies and Playwright browsers
-        run: |
-          npm ci
-          npx playwright install --with-deps
+    - name: Install dependencies and Playwright browsers
+      run: |
+        npm ci
+        npx playwright install --with-deps
 
-      - name: Ensure jq and curl are available
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl
+    - name: Ensure jq and curl are available
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq curl
 
-      # Create RTM Test Execution and Upload Playwright Results
+    - name: Create RTM Test Execution and Upload Playwright Results
   id: create_te
   shell: bash
   env:
@@ -45,19 +45,19 @@ jobs:
   run: |
     # Encode Basic Auth header
     BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 | tr -d '\n') 
-    
+
     # Create Test Execution
     TE_NAME="Playwright Run - ${GITHUB_RUN_NUMBER}"
     TE_DESC="CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})"
-    
+
     TE_RESP=$(curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
       -H "Authorization: Basic $BASIC" \
       -H "Content-Type: application/json" \
       -d "{\"projectKey\":\"$JIRA_PROJECT_KEY\",\"name\":\"$TE_NAME\",\"description\":\"$TE_DESC\"}")
-    
+
     echo "RAW RESPONSE:"
     echo "$TE_RESP" | tee te.json
-    
+
     TE_KEY=$(jq -r '.key // empty' te.json)
     if [ -z "$TE_KEY" ]; then
       echo "Failed to create Test Execution. Response:"
@@ -65,14 +65,31 @@ jobs:
       exit 1
     fi
     echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
-    
+
     # Check Playwright JSON report exists
     if [ ! -f test-artifacts/test-reporter.json ]; then
       echo "ERROR: test-artifacts/test-reporter.json not found!"
       ls -l test-artifacts/
       exit 1
     fi
-    
+
+    # Loop through Playwright test results and post to RTM
+    jq -c '.tests[]' test-artifacts/test-reporter.json | while read test; do
+      NAME=$(echo "$test" | jq -r '.title | join(" ")')
+      STATUS=$(echo "$test" | jq -r '.status' | awk '{print toupper($0)}')  # PASSED / FAILED / SKIPPED
+      TESTCASE_KEY=$(echo "$test" | jq -r '.annotations[]? | select(.type=="testCaseKey") | .value')
+      
+      if [ -z "$TESTCASE_KEY" ]; then
+        echo "Skipping test \"$NAME\" because no testCaseKey annotation found."
+        continue
+      fi
+      
+      curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
+        -H "Authorization: Basic $BASIC" \
+        -H "Content-Type: application/json" \
+        -d "{\"testCaseKey\":\"$TESTCASE_KEY\",\"testExecutionKey\":\"$TE_KEY\",\"status\":\"$STATUS\",\"comment\":\"Executed by GitHub Actions Playwright run\"}"
+    done
+
     # Loop through Playwright test results and post to RTM
     jq -c '.tests[]' test-artifacts/test-reporter.json | while read test; do
       NAME=$(echo "$test" | jq -r '.title | join(" ")')
