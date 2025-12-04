@@ -1,11 +1,12 @@
 name: Playwright → RTM for Jira 2
 
 on:
-  workflow_dispatch: null
+  workflow_dispatch:
   push:
     branches:
     - main
-  pull_request: null
+  pull_request:
+
 
 jobs:
   test-and-report:
@@ -24,8 +25,8 @@ jobs:
       with:
         node-version: '20'
 
-    name: Install dependencies and Playwright browsers
-      run:|
+    - name: Install dependencies and Playwright browsers
+      run: |
         npm ci
         npx playwright install --with-deps
 
@@ -34,84 +35,67 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y jq curl
 
-    name: Create RTM Test Execution and Upload Playwright Results
-  id: create_te
-  shell: bash
-  env:
-    JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-    JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-    JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-    JIRA_PROJECT_KEY: ECS
-  run: |
-    # Encode Basic Auth header
-    BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 | tr -d '\n') 
+    - name: Create RTM Test Execution and Upload Playwright Results
+      id: create_te
+      shell: bash
+      env:
+        JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+        JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        JIRA_PROJECT_KEY: ECS
+      run: |
+        # Encode Basic Auth header
+        BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 | tr -d '\n') 
 
-    # Create Test Execution
-    TE_NAME="Playwright Run - ${GITHUB_RUN_NUMBER}"
-    TE_DESC="CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})"
+        # Create Test Execution
+        TE_NAME="Playwright Run - ${GITHUB_RUN_NUMBER}"
+        TE_DESC="CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})"
 
-    TE_RESP=$(curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
-      -H "Authorization: Basic $BASIC" \
-      -H "Content-Type: application/json" \
-      -d "{\"projectKey\":\"$JIRA_PROJECT_KEY\",\"name\":\"$TE_NAME\",\"description\":\"$TE_DESC\"}")
+        TE_RESP=$(curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
+          -H "Authorization: Basic $BASIC" \
+          -H "Content-Type: application/json" \
+          -d "{\"projectKey\":\"$JIRA_PROJECT_KEY\",\"name\":\"$TE_NAME\",\"description\":\"$TE_DESC\"}")
 
-    echo "RAW RESPONSE:"
-    echo "$TE_RESP" | tee te.json
+        echo "RAW RESPONSE:"
+        echo "$TE_RESP" | tee te.json
 
-    TE_KEY=$(jq -r '.key // empty' te.json)
-    if [ -z "$TE_KEY" ]; then
-      echo "Failed to create Test Execution. Response:"
-      cat te.json
-      exit 1
-    fi
-    echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
+        TE_KEY=$(jq -r '.key // empty' te.json)
+        if [ -z "$TE_KEY" ]; then
+          echo "Failed to create Test Execution. Response:"
+          cat te.json
+          exit 1
+        fi
+        echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
 
-    # Check Playwright JSON report exists
-    if [ ! -f test-artifacts/test-reporter.json ]; then
-      echo "ERROR: test-artifacts/test-reporter.json not found!"
-      ls -l test-artifacts/
-      exit 1
-    fi
+        # Check Playwright JSON report exists
+        if [ ! -f test-results/results.json ]; then
+          echo "ERROR: test-results/results.json not found!"
+          ls -la test-results/
+          exit 1
+        fi
 
-    # Loop through Playwright test results and post to RTM
-    jq -c '.tests[]' test-artifacts/test-reporter.json | while read test; do
-      NAME=$(echo "$test" | jq -r '.title | join(" ")')
-      STATUS=$(echo "$test" | jq -r '.status' | awk '{print toupper($0)}')  # PASSED / FAILED / SKIPPED
-      TESTCASE_KEY=$(echo "$test" | jq -r '.annotations[]? | select(.type=="testCaseKey") | .value')
-      
-      if [ -z "$TESTCASE_KEY" ]; then
-        echo "Skipping test \"$NAME\" because no testCaseKey annotation found."
-        continue
-      fi
-      
-      curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
-        -H "Authorization: Basic $BASIC" \
-        -H "Content-Type: application/json" \
-        -d "{\"testCaseKey\":\"$TESTCASE_KEY\",\"testExecutionKey\":\"$TE_KEY\",\"status\":\"$STATUS\",\"comment\":\"Executed by GitHub Actions Playwright run\"}"
-    done
+        # Loop through Playwright test results and post to RTM
+        jq -c '.tests[]' test-results/results.json | while read test; do
+          NAME=$(echo "$test" | jq -r '.title | join(" ")')
+          STATUS=$(echo "$test" | jq -r '.status' | awk '{print toupper($0)}')  # PASSED / FAILED / SKIPPED
+          TESTCASE_KEY=$(echo "$test" | jq -r '.annotations[]? | select(.type=="testCaseKey") | .value')
+          
+          if [ -z "$TESTCASE_KEY" ]; then
+            echo "Skipping test \"$NAME\" because no testCaseKey annotation found."
+            continue
+          fi
+          
+          curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
+            -H "Authorization: Basic $BASIC" \
+            -H "Content-Type: application/json" \
+            -d "{\"testCaseKey\":\"$TESTCASE_KEY\",\"testExecutionKey\":\"$TE_KEY\",\"status\":\"$STATUS\",\"comment\":\"Executed by GitHub Actions Playwright run\"}"
+        done
 
-    # Loop through Playwright test results and post to RTM
-    jq -c '.tests[]' test-artifacts/test-reporter.json | while read test; do
-      NAME=$(echo "$test" | jq -r '.title | join(" ")')
-      STATUS=$(echo "$test" | jq -r '.status' | awk '{print toupper($0)}')  # PASSED / FAILED / SKIPPED
-      TESTCASE_KEY=$(echo "$test" | jq -r '.annotations[]? | select(.type=="testCaseKey") | .value')
-      
-      if [ -z "$TESTCASE_KEY" ]; then
-        echo "Skipping test \"$NAME\" because no testCaseKey annotation found."
-        continue
-      fi
-      
-      curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
-        -H "Authorization: Basic $BASIC" \
-        -H "Content-Type: application/json" \
-        -d "{\"testCaseKey\":\"$TESTCASE_KEY\",\"testExecutionKey\":\"$TE_KEY\",\"status\":\"$STATUS\",\"comment\":\"Executed by GitHub Actions Playwright run\"}"
-    done
-
-      name: Upload job outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: rtm-${{ env.TE_KEY }}
-          path: |
-            te.json
-            test-reporter.json
-          if-no-files-found: warn
+    - name: Upload job outputs
+      uses: actions/upload-artifact@v4
+      with:
+        name: rtm-${{ env.TE_KEY }}
+        path: |
+          te.json
+          test-results/results.json
+        if-no-files-found: warn
