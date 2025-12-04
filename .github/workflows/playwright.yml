@@ -34,7 +34,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq curl
 
-      - name: Create RTM Test Execution and Upload Playwright Results
+      # Create RTM Test Execution and Upload Playwright Results
   id: create_te
   shell: bash
   env:
@@ -90,7 +90,7 @@ jobs:
         -d "{\"testCaseKey\":\"$TESTCASE_KEY\",\"testExecutionKey\":\"$TE_KEY\",\"status\":\"$STATUS\",\"comment\":\"Executed by GitHub Actions Playwright run\"}"
     done
 
-      - name: Upload job outputs
+      # Upload job outputs
         uses: actions/upload-artifact@v4
         with:
           name: rtm-${{ env.TE_KEY }}
