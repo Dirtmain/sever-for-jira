@@ -1,109 +1,59 @@
-name: Playwright → RTM for Jira 2
+name: Playwright + RTM Import
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  test-and-report:
+  test:
     runs-on: ubuntu-latest
-    env:
-      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-      JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # Checkout project
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
+      # Set up Node
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
 
-    - name: Install dependencies + Playwright browsers
-      run: |
-        npm ci
-        npx playwright install --with-deps
+      # Install deps + Playwright
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps
 
-    - name: Run Playwright tests (JSON report)
-      run: |
-        mkdir -p test-results
-        npx playwright test --reporter=json --output=test-results
+      # Run Playwright with JUnit reporter
+      - name: Run Playwright tests
+        run: |
+          npx playwright test --reporter=junit,html
+        env:
+          CI: true
 
-    - name: Ensure jq and curl are installed
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y jq curl
+      # Create ZIP archive with XMLs for RTM import
+      - name: Archive JUnit results
+        run: |
+          mkdir -p rtm-archive
+          cp -r playwright-report/*.xml rtm-archive/
+          cd rtm-archive
+          zip -r ../rtm-results.zip .
 
-    - name: Create RTM Test Execution and Upload Results
-      id: create_te
-      shell: bash
-      env:
-        JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-        JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-        JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
-      run: |
-        # Encode Basic Auth
-        BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 | tr -d '\n')
+      # Upload to Deviniti RTM
+      - name: Upload test results to RTM
+        run: |
+          echo "Uploading results to RTM…"
 
-        # Create Test Execution in RTM
-        TE_NAME="Playwright Run - ${GITHUB_RUN_NUMBER}"
-        TE_DESC="CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})"
-
-        TE_RESP=$(curl -v -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
-          -H "Authorization: Basic $BASIC" \
-          -H "Content-Type: application/json" \
-          -d "{\"projectKey\":\"$JIRA_PROJECT_KEY\",\"name\":\"$TE_NAME\",\"description\":\"$TE_DESC\"}")
-
-        echo "RAW RESPONSE:"
-        echo "$TE_RESP" | tee te.json
-
-        TE_KEY=$(jq -r '.key // empty' te.json)
-        if [ -z "$TE_KEY" ]; then
-          echo "Failed to create Test Execution."
-          cat te.json
-          exit 1
-        fi
-        echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
-        echo "Created Test Execution: $TE_KEY"
-
-        # Validate Playwright JSON report exists
-        if [ ! -f test-results/results.json ]; then
-          echo "ERROR: test-results/results.json not found!"
-          ls -la test-results/
-          exit 1
-        fi
-
-        # Loop through Playwright tests and upload results to RTM
-        jq -c '.tests[]' test-results/results.json | while read test; do
-          NAME=$(echo "$test" | jq -r '.title | join(" ")')
-          STATUS=$(echo "$test" | jq -r '.status' | awk '{print toupper($0)}')
-          TESTCASE_KEY=$(echo "$test" | jq -r '.annotations[]? | select(.type=="testCaseKey") | .value')
-
-          if [ -z "$TESTCASE_KEY" ]; then
-            echo "Skipping test \"$NAME\": no testCaseKey annotation."
-            continue
-          fi
-
-          curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
-            -H "Authorization: Basic $BASIC" \
-            -H "Content-Type: application/json" \
-            -d "{\"testCaseKey\":\"$TESTCASE_KEY\",\"testExecutionKey\":\"$TE_KEY\",\"status\":\"$STATUS\",\"comment\":\"Executed by GitHub Actions Playwright run\"}"
-
-          echo "Uploaded result for $TESTCASE_KEY → $STATUS"
-        done
-
-    - name: Upload job artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: rtm-${{ env.TE_KEY }}
-        path: |
-          te.json
-          test-results/results.json
-        if-no-files-found: warn
+          curl -X POST "$RTM_BASE_URL/api/v2/automation/import-test-results" \
+            -H "Authorization: Bearer $RTM_API_TOKEN" \
+            -F "projectKey=$RTM_PROJECT_KEY" \
+            -F "reportType=JUNIT" \
+            -F "file=@rtm-results.zip" \
+            -F "name=Playwright Results $(date +'%Y-%m-%d %H:%M')" \
+            -F "jobUrl=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        env:
+          RTM_BASE_URL: ${{ secrets.RTM_BASE_URL }}
+          RTM_API_TOKEN: ${{ secrets.RTM_API_TOKEN }}
+          RTM_PROJECT_KEY: ${{ secrets.RTM_PROJECT_KEY }}
