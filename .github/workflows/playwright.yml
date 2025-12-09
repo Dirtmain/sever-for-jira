@@ -56,7 +56,7 @@ jobs:
         TE_NAME="Playwright Run - ${GITHUB_RUN_NUMBER}"
         TE_DESC="CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})"
 
-        TE_RESP=$(curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
+        TE_RESP=$(curl -v -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
           -H "Authorization: Basic $BASIC" \
           -H "Content-Type: application/json" \
           -d "{\"projectKey\":\"$JIRA_PROJECT_KEY\",\"name\":\"$TE_NAME\",\"description\":\"$TE_DESC\"}")
