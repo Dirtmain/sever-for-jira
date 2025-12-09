@@ -1,76 +1,109 @@
-name: Playwright Tests
+name: Playwright → RTM for Jira 2
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
 
 jobs:
-  test:
+  test-and-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    env:
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
 
     steps:
-      # 1. Checkout repo
-      - uses: actions/checkout@v5
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      # 2. Node setup
-      - uses: actions/setup-node@v5
-        with:
-          node-version: lts/*
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
-      # 3. Install dependencies
-      - name: Install dependencies
-        run: npm ci
+    - name: Install dependencies + Playwright browsers
+      run: |
+        npm ci
+        npx playwright install --with-deps
 
-      # 4. Install Playwright browsers
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
+    - name: Run Playwright tests (JSON report)
+      run: |
+        mkdir -p test-results
+        npx playwright test --reporter=json --output=test-results
 
-      # 5. Run Playwright tests
-      - name: Run Playwright tests
-        id: tests
-        continue-on-error: true
-        run: |
-          echo "Running Playwright tests..."
-          npx playwright test
-          echo "EXIT_CODE=$?" >> $GITHUB_ENV
+    - name: Ensure jq and curl are installed
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq curl
 
-      # 6. Upload HTML test report
-      - name: Upload Playwright HTML report
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
+    - name: Create RTM Test Execution and Upload Results
+      id: create_te
+      shell: bash
+      env:
+        JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+        JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+      run: |
+        # Encode Basic Auth
+        BASIC=$(printf "%s:%s" "$JIRA_EMAIL" "$JIRA_API_TOKEN" | base64 | tr -d '\n')
 
-      # 7. Post comment to Jira RTM Test Execution
-      - name: Comment results on Jira Test Execution
-        if: ${{ always() }}
-        env:
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          TEST_EXEC_KEY: "RTM-ECS"  # <-- REPLACE WITH YOUR TEST EXECUTION KEY
-          STATUS: ${{ env.EXIT_CODE }}
-        run: |
-          if [ "$STATUS" -eq 0 ]; then
-            RESULT="PASSED"
-          else
-            RESULT="FAILED"
+        # Create Test Execution in RTM
+        TE_NAME="Playwright Run - ${GITHUB_RUN_NUMBER}"
+        TE_DESC="CI run ${GITHUB_RUN_ID} on ${GITHUB_REF} (commit ${GITHUB_SHA})"
+
+        TE_RESP=$(curl -v -X POST "$JIRA_BASE_URL/rest/rtm/latest/testexecution" \
+          -H "Authorization: Basic $BASIC" \
+          -H "Content-Type: application/json" \
+          -d "{\"projectKey\":\"$JIRA_PROJECT_KEY\",\"name\":\"$TE_NAME\",\"description\":\"$TE_DESC\"}")
+
+        echo "RAW RESPONSE:"
+        echo "$TE_RESP" | tee te.json
+
+        TE_KEY=$(jq -r '.key // empty' te.json)
+        if [ -z "$TE_KEY" ]; then
+          echo "Failed to create Test Execution."
+          cat te.json
+          exit 1
+        fi
+        echo "TE_KEY=$TE_KEY" >> $GITHUB_ENV
+        echo "Created Test Execution: $TE_KEY"
+
+        # Validate Playwright JSON report exists
+        if [ ! -f test-results/results.json ]; then
+          echo "ERROR: test-results/results.json not found!"
+          ls -la test-results/
+          exit 1
+        fi
+
+        # Loop through Playwright tests and upload results to RTM
+        jq -c '.tests[]' test-results/results.json | while read test; do
+          NAME=$(echo "$test" | jq -r '.title | join(" ")')
+          STATUS=$(echo "$test" | jq -r '.status' | awk '{print toupper($0)}')
+          TESTCASE_KEY=$(echo "$test" | jq -r '.annotations[]? | select(.type=="testCaseKey") | .value')
+
+          if [ -z "$TESTCASE_KEY" ]; then
+            echo "Skipping test \"$NAME\": no testCaseKey annotation."
+            continue
           fi
 
-          COMMENT="Automated Playwright Execution Result: *$RESULT*%0A
-          Workflow: $GITHUB_WORKFLOW%0A
-          Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}%0A
-          HTML Report: (download the 'playwright-report' artifact)%0A
-          Commit: ${{ github.sha }}%0A
-          Branch: ${{ github.ref }}%0A
-          Timestamp: $(date -u)"
-
-          curl -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+          curl -sS -X POST "$JIRA_BASE_URL/rest/rtm/latest/testcaseexecution" \
+            -H "Authorization: Basic $BASIC" \
             -H "Content-Type: application/json" \
-            -X POST \
-            --data "{\"body\": \"$COMMENT\"}" \
-            "$JIRA_BASE_URL/rest/api/2/issue/$TEST_EXEC_KEY/comment"
+            -d "{\"testCaseKey\":\"$TESTCASE_KEY\",\"testExecutionKey\":\"$TE_KEY\",\"status\":\"$STATUS\",\"comment\":\"Executed by GitHub Actions Playwright run\"}"
+
+          echo "Uploaded result for $TESTCASE_KEY → $STATUS"
+        done
+
+    - name: Upload job artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: rtm-${{ env.TE_KEY }}
+        path: |
+          te.json
+          test-results/results.json
+        if-no-files-found: warn
