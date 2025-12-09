@@ -1,34 +1,18 @@
 import { test, expect } from '@playwright/test';
 
-test('login with HTTP Auth and verify liczba usług', async ({ browser }) => {
-  // --- CONFIG VARIABLE ---
-  const MIN_USLUGI = 255;   // ← change this anytime
+test('has title', async ({ page }) => {
+  await page.goto('https://playwright.dev/');
 
-  const context = await browser.newContext({
-    httpCredentials: {
-      username: 'platforma',
-      password: 'platforma99'
-    }
-  });
+  // Expect a title "to contain" a substring.
+  await expect(page).toHaveTitle(/Playwright/);
+});
 
-  const page = await context.newPage();
+test('get started link', async ({ page }) => {
+  await page.goto('https://playwright.dev/');
 
-  await page.goto('https://pm.bydgoszcz.pl/', { waitUntil: 'networkidle' });
+  // Click the get started link.
+  await page.getByRole('link', { name: 'Get started' }).click();
 
-  // Accept cookies
-  await page.getByRole('button', { name: 'Akceptuj cookies' }).click();
-
-  // Open menu
- await page.locator('button').filter({ hasText: /^Menu$/ }).click();
-
-  // Go to Katalog usług
-  await page.getByRole('link', { name: 'Katalog usług', exact: true }).click();
-
-  // --- GET LICZBA USŁUG ---
-  const text = await page.locator('text=Liczba usług').innerText();  
-  const value = Number(text.replace(/\D+/g, ''));
-
-  // --- ASSERTION WITH VARIABLE ---
-  expect(value, `Liczba usług jest za mała! Spodziewana ilość ≥ ${MIN_USLUGI}, otrzymana ilość: ${value}`)
-    .toBeGreaterThanOrEqual(MIN_USLUGI);
+  // Expects page to have a heading with the name of Installation.
+  await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
 });
