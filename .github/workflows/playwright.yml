@@ -48,12 +48,14 @@ jobs:
 
           curl -X POST "$RTM_BASE_URL/api/v2/automation/import-test-results" \
             -H "Authorization: Bearer $RTM_API_TOKEN" \
-            -H "Accept: application/json" \
             -F "projectKey=$RTM_PROJECT_KEY" \
-            -F "reportType=JUNIT" \
             -F "file=@rtm-results.zip" \
+            -F "reportType=JUNIT" \
             -F "name=Playwright Results $(date +'%Y-%m-%d %H:%M')" \
+            -F 'treePath=/Automatic/e2e/moduleA'
             -F "jobUrl=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            -F 'testExecutionFields={ "fields": {"labels" : ["e2etest"]} }' \
+            -F 'testCaseFields={"labels": ["automated", "regression"]}
         env:
           RTM_BASE_URL: ${{ secrets.RTM_BASE_URL }}
           RTM_API_TOKEN: ${{ secrets.RTM_API_TOKEN }}
