@@ -48,6 +48,7 @@ jobs:
 
           curl -X POST "$RTM_BASE_URL/api/v2/automation/import-test-results" \
             -H "Authorization: Bearer $RTM_API_TOKEN" \
+            -H "Accept: application/json" \
             -F "projectKey=$RTM_PROJECT_KEY" \
             -F "reportType=JUNIT" \
             -F "file=@rtm-results.zip" \
