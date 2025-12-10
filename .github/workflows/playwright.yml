@@ -37,7 +37,7 @@ jobs:
       - name: Archive JUnit results
         run: |
           mkdir -p rtm-archive
-          cp -r playwright-report/*.xml rtm-archive/
+          cp -r results.xml rtm-archive/
           cd rtm-archive
           zip -r ../rtm-results.zip .
 
