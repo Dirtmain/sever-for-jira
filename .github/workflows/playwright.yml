@@ -36,10 +36,15 @@ jobs:
       # Create ZIP archive with XMLs for RTM import
       - name: Archive JUnit results
         run: |
+          ls -la
+          echo "XML files found:"
+          find . -name "*.xml" -type f
           mkdir -p rtm-archive
-          cp -r test-results/*.xml rtm-archive/ 2>/dev/null || echo "No XML files found"
+          cp *.xml rtm-archive/ 2>/dev/null || echo "No XML files in root"
           cd rtm-archive
           zip -r ../rtm-results.zip .
+          echo "Archive created:"
+          ls -lh ../rtm-results.zip
 
       # Upload to Deviniti RTM
       - name: Upload test results to RTM
