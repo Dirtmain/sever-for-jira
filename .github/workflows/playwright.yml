@@ -52,12 +52,10 @@ jobs:
             -F "file=@rtm-results.zip" \
             -F "reportType=JUNIT" \
             -F "name=Playwright Results $(date +'%Y-%m-%d %H:%M')" \
-            -F 'treePath=/Automatic/e2e/moduleA'
-            -F "jobUrl=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            -F 'treePath=/Automatic/e2e/moduleA'\
+            -F "jobUrl=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"\
             -F 'testExecutionFields={ "fields": {"labels" : ["e2etest"]} }' \
-            -F 'testCaseFields={"labels": ["automated", "regression"]}
-            
-          echo "$RTM_BASE_URL"
+            -F 'testCaseFields={"labels": ["automated", "regression"]}'
 
         env:
           RTM_BASE_URL: ${{ secrets.RTM_BASE_URL }}
