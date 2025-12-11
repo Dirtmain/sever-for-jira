@@ -47,6 +47,7 @@ jobs:
           echo "Uploading results to RTM…"
 
           curl -X POST "$RTM_BASE_URL/v2/automation/import-test-results" \
+            echo "$RTM_BASE_URL" \
             -H "Authorization: Bearer $RTM_API_TOKEN" \
             -F "projectKey=$RTM_PROJECT_KEY" \
             -F "file=@rtm-results.zip" \
