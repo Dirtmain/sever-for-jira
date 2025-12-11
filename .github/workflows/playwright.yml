@@ -55,7 +55,7 @@ jobs:
             -F 'treePath=/Automatic/e2e/moduleA'\
             -F "jobUrl=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"\
             -F 'testExecutionFields={ "fields": {"labels" : ["e2etest"]} }' \
-            -F 'testCaseFields={"labels": ["automated", "regression"]}'
+            -F 'testCaseFields={"fields": {"labels": ["automated", "regression"]}}'
 
         env:
           RTM_BASE_URL: https://rtm-eu-api.hexygen.com/api
