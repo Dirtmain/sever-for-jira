@@ -47,7 +47,6 @@ jobs:
           echo "Uploading results to RTM…"
 
           curl -X POST "$RTM_BASE_URL/v2/automation/import-test-results" \
-            echo "$RTM_BASE_URL" \
             -H "Authorization: Bearer $RTM_API_TOKEN" \
             -F "projectKey=$RTM_PROJECT_KEY" \
             -F "file=@rtm-results.zip" \
@@ -57,6 +56,9 @@ jobs:
             -F "jobUrl=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             -F 'testExecutionFields={ "fields": {"labels" : ["e2etest"]} }' \
             -F 'testCaseFields={"labels": ["automated", "regression"]}
+            
+          echo "$RTM_BASE_URL"
+
         env:
           RTM_BASE_URL: ${{ secrets.RTM_BASE_URL }}
           RTM_API_TOKEN: ${{ secrets.RTM_API_TOKEN }}
