@@ -58,6 +58,6 @@ jobs:
             -F 'testCaseFields={"labels": ["automated", "regression"]}'
 
         env:
-          RTM_BASE_URL: ${{ secrets.RTM_BASE_URL }}
-          RTM_API_TOKEN: ${{ secrets.RTM_API_TOKEN }}
-          RTM_PROJECT_KEY: ${{ secrets.RTM_PROJECT_KEY }}
+          RTM_BASE_URL: https://rtm-eu-api.hexygen.com/api
+          RTM_API_TOKEN: eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiI0OTIyNTkifQ.7Ne6V2Kn5t-KC-FLAWhMEH5xme1qSRCnH3OMT8x_6Ec1859lb1vgjDL8dIzaure7
+          RTM_PROJECT_KEY: ECS
