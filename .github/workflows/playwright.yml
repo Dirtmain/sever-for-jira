@@ -37,7 +37,7 @@ jobs:
       - name: Archive JUnit results
         run: |
           mkdir -p rtm-archive
-          cp -r test-results/*.xml rtm-archive/
+          cp -r test-results/ rtm-archive/
           cd rtm-archive
           zip -r ../rtm-results.zip .
 
