@@ -33,18 +33,27 @@ jobs:
         env:
           CI: true
 
-      # Create ZIP archive with XMLs for RTM import
       - name: Archive JUnit results
         run: |
+          # Debugging output to check files
           ls -la
-          find ./tests -name "*.xml" -type f
-          cp ./tests/*.xml rtm-archive/ || echo "No XML files found"
+          echo "XML files found in test-results:"
+          find ./test-results -name "results.xml" -type f
+          
+          # Create archive folder if it doesn't exist
           mkdir -p rtm-archive
-          cp *.xml rtm-archive/ 2>/dev/null || echo "No XML files in root"
+          
+          # Copy XML files from test-results
+          cp ./test-results/results.xml rtm-archive/ || echo "No XML files found in test-results"
+          
+          # Create the ZIP archive
           cd rtm-archive
           zip -r ../rtm-results.zip .
+          
+          # Show the archive details
           echo "Archive created:"
           ls -lh ../rtm-results.zip
+
 
       # Upload to Deviniti RTM
       - name: Upload test results to RTM
