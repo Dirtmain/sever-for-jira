@@ -42,14 +42,15 @@ jobs:
           echo "Listing contents of test-results directory:"
           ls -la ./test-results
           
-          echo "XML files found in test-results:"
-          find ./test-results -name "results.xml" -type f
+          echo "Searching for results.xml in the root directory:"
+          find . -name "results.xml" -type f
           
           # Create archive folder if it doesn't exist
           mkdir -p rtm-archive
           
-          # Copy XML files from test-results using absolute path
-          cp $(pwd)/test-results/results.xml rtm-archive/ || echo "No XML files found in test-results"
+          # Copy XML files from the root directory or test-results
+          cp ./results.xml rtm-archive/ || echo "No XML files found in root directory"
+          cp ./test-results/results.xml rtm-archive/ || echo "No XML files found in test-results"
           
           # Create the ZIP archive
           cd rtm-archive
