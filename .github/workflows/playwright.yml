@@ -36,15 +36,20 @@ jobs:
       - name: Archive JUnit results
         run: |
           # Debugging output to check files
+          echo "Listing contents of current directory:"
           ls -la
+          
+          echo "Listing contents of test-results directory:"
+          ls -la ./test-results
+          
           echo "XML files found in test-results:"
           find ./test-results -name "results.xml" -type f
           
           # Create archive folder if it doesn't exist
           mkdir -p rtm-archive
           
-          # Copy XML files from test-results
-          cp ./test-results/results.xml rtm-archive/ || echo "No XML files found in test-results"
+          # Copy XML files from test-results using absolute path
+          cp $(pwd)/test-results/results.xml rtm-archive/ || echo "No XML files found in test-results"
           
           # Create the ZIP archive
           cd rtm-archive
@@ -53,6 +58,7 @@ jobs:
           # Show the archive details
           echo "Archive created:"
           ls -lh ../rtm-results.zip
+
 
 
       # Upload to Deviniti RTM
