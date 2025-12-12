@@ -33,6 +33,12 @@ jobs:
         env:
           CI: true
 
+      - name: Check contents of test-results after Playwright tests
+        run: |
+          echo "Listing contents of test-results:"
+          ls -la ./test-results
+
+
       - name: Archive JUnit results
         run: |
           # Debugging output to check files
