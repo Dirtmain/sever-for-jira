@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      RTM_BASE_URL: https://rtm-eu-api.hexygen.com/api
+      RTM_BASE_URL: https://rtm-eu-api.hexygen.com
       RTM_PROJECT_KEY: ECS
       CI: true
 
