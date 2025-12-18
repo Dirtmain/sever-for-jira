@@ -58,81 +58,27 @@ jobs:
             -o .rtm/execution.json
 
           echo "Building mapping + grep pattern from execution.json"
-          python3 - <<'PY'
-          import json, re, os, sys
-          from pathlib import Path
+          # Build TC -> TCE map from testCaseExecutions[].testKey (e.g. ECS-67-ECS-63)
+          jq --arg exec "$EXECUTION_KEY" '
+          (.testCaseExecutions // [])
+          | map(.testKey)
+          | map(select(startswith($exec + "-")))
+          | map({ (sub("^" + ($exec + "-"); "")) : . })
+          | add // {}
+          ' .rtm/execution.json > .rtm/tce_map.json
 
-          exec_json = json.loads(Path(".rtm/execution.json").read_text(encoding="utf-8"))
+          # Build grep from TC keys + @TC keys
+          if [ "$(jq 'length' .rtm/tce_map.json)" -gt 0 ]; then
+          jq -r '
+          keys as $k
+          | ($k + ($k | map("@" + .)))
+          | unique
+          | "(" + (join("|")) + ")"
+          ' .rtm/tce_map.json > .rtm/grep.txt
+          else
+          echo "" > .rtm/grep.txt
+          fi
 
-          # --- Helpers: walk JSON ---
-          def walk(obj):
-            if isinstance(obj, dict):
-              yield obj
-              for v in obj.values():
-                yield from walk(v)
-            elif isinstance(obj, list):
-              for it in obj:
-                yield from walk(it)
-
-          # --- Extract all "issue keys" that look like ABC-123 (TestCase keys) ---
-          key_re = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
-          all_text = json.dumps(exec_json, ensure_ascii=False)
-          all_issue_keys = sorted(set(key_re.findall(all_text)))
-
-          # Heuristic: test cases are usually like ECS-63 etc; keep all keys that match PROJECTKEY-<number>
-          project_key = os.environ.get("RTM_PROJECT_KEY", "ECS")
-          tc_keys = [k for k in all_issue_keys if k.startswith(project_key + "-")]
-
-          # --- Build mapping TestCaseKey -> TestCaseExecutionKey (TCE key) ---
-          # RTM struktura różni się między wersjami, więc robimy heurystyki:
-          mapping = {}
-
-          # Pattern A: {"testCaseKey": "ECS-63", "testCaseExecutionKey": "ECS-TCE-123"}
-          for d in walk(exec_json):
-            if "testCaseKey" in d and "testCaseExecutionKey" in d:
-              tck = d.get("testCaseKey")
-              tcek = d.get("testCaseExecutionKey")
-              if isinstance(tck, str) and isinstance(tcek, str):
-                mapping[tck] = tcek
-
-          # Pattern B: {"testKey":"ECS-63", "testCaseExecutionKey":"..."}  (czasem "testKey" to TC)
-          for d in walk(exec_json):
-            if "testKey" in d and "testCaseExecutionKey" in d:
-              tck = d.get("testKey")
-              tcek = d.get("testCaseExecutionKey")
-              if isinstance(tck, str) and isinstance(tcek, str):
-                if tck.startswith(project_key + "-"):
-                  mapping[tck] = tcek
-
-          # Pattern C: {"testCase":{"testKey":"ECS-63"}, "testKey":"<TCE>"} (czasem "testKey" to TCE)
-          for d in walk(exec_json):
-            tc = d.get("testCase")
-            if isinstance(tc, dict) and isinstance(tc.get("testKey"), str) and isinstance(d.get("testKey"), str):
-              tck = tc["testKey"]
-              tcek = d["testKey"]
-              if tck.startswith(project_key + "-"):
-                mapping[tck] = tcek
-
-          # If we couldn't build mapping, still build grep from tc_keys (you can run tests anyway)
-          Path(".rtm/tce_map.json").write_text(json.dumps(mapping, indent=2, ensure_ascii=False), encoding="utf-8")
-
-          # Build grep: assume your Playwright tests contain TC key in title, e.g. "@ECS-63" or "ECS-63"
-          # We'll match either "@ECS-63" or "ECS-63"
-          if tc_keys:
-            parts = []
-            for k in tc_keys:
-              parts.append(re.escape(k))
-              parts.append(re.escape("@" + k))
-            grep = "(" + "|".join(sorted(set(parts))) + ")"
-          else:
-            grep = ""
-
-          Path(".rtm/grep.txt").write_text(grep, encoding="utf-8")
-
-          print("Found TC keys:", tc_keys[:50], "..." if len(tc_keys) > 50 else "")
-          print("Mapping size:", len(mapping))
-          print("Grep:", grep)
-          PY
 
           echo "=== .rtm/grep.txt ==="
           cat .rtm/grep.txt || true
@@ -203,45 +149,30 @@ jobs:
           fi
 
           # Build results map: TestCaseKey -> PASS/FAIL
-          python3 - <<'PY'
-          import json, re
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
+          echo "Building mapping + grep pattern from execution.json"
 
-          tce_map = json.loads(Path(".rtm/tce_map.json").read_text(encoding="utf-8") or "{}")
-          xml_path = Path("test-results/results.xml")
+          # Build TC -> TCE map:
+          # "ECS-63": "ECS-67-ECS-63"
+          jq --arg exec "$EXECUTION_KEY" '
+          (.testCaseExecutions // [])
+          | map(.testKey)
+          | map(select(startswith($exec + "-")))
+          | map({ (sub("^" + ($exec + "-"); "")) : . })
+          | add // {}
+          ' .rtm/execution.json > .rtm/tce_map.json
 
-          tree = ET.parse(xml_path)
-          root = tree.getroot()
+          # Build grep from TC keys (ECS-63 etc.) and @ECS-63
+          if [ "$(jq 'length' .rtm/tce_map.json)" -gt 0 ]; then
+          jq -r '
+          keys as $k
+          | ($k + ($k | map("@" + .)))
+          | unique
+          | "(" + (join("|")) + ")"
+          ' .rtm/tce_map.json > .rtm/grep.txt
+          else
+          echo "" > .rtm/grep.txt
+          fi
 
-          key_re = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
-
-          # junit can be <testsuites> or <testsuite>
-          testcases = root.findall(".//testcase")
-
-          outcomes = {}  # tcKey -> "Pass"/"Fail"
-          for tc in testcases:
-            name = (tc.get("name") or "") + " " + (tc.get("classname") or "")
-            keys = key_re.findall(name)
-            if not keys:
-              continue
-
-            # fail if has <failure> or <error>
-            failed = (tc.find("failure") is not None) or (tc.find("error") is not None)
-
-            for k in keys:
-              # record outcome (Fail wins)
-              prev = outcomes.get(k)
-              if failed:
-                outcomes[k] = "FAIL"
-              else:
-                if prev != "FAIL":
-                  outcomes[k] = "PASS"
-
-          Path(".rtm/outcomes.json").write_text(json.dumps(outcomes, indent=2), encoding="utf-8")
-          print("Extracted outcomes:", len(outcomes))
-          print("Have TCE mapping:", len(tce_map))
-          PY
 
           echo "Outcomes extracted from JUnit:"
           cat .rtm/outcomes.json || true
