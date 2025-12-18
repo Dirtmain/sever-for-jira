@@ -140,6 +140,13 @@ jobs:
           echo "=== .rtm/tce_map.json (first lines) ==="
           head -n 50 .rtm/tce_map.json || true
 
+      - name: print json because shit pmo
+        if: always()
+        run: |
+          echo "=== .rtm/execution.json ==="
+          head -n 200 .rtm/execution.json || true
+          echo ""      
+
 
       - name: Debug list discovered tests
         run: npx playwright test --list
