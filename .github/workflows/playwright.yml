@@ -40,10 +40,8 @@ jobs:
           npm ci
           npx playwright install --with-deps
 
-      # 1) Pobierz Test Execution (ECS-67) i zbuduj:
-      # - mapowanie: TestCaseKey (np. ECS-63) -> TestCaseExecutionKey (TCE key)
-      # - grep regex do Playwright, żeby odpalić tylko testy z tej egzekucji
-      - name: Fetch RTM execution + build TCE mapping
+      # 1) Download Test Execution JSON + build mapping + build grep
+      - name: Fetch RTM execution + build TCE mapping + grep
         env:
           RTM_API_TOKEN: eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiI0OTIyNTkifQ.7Ne6V2Kn5t-KC-FLAWhMEH5xme1qSRCnH3OMT8x_6Ec1859lb1vgjDL8dIzaure7
           EXECUTION_KEY: ${{ inputs.executionKey }}
@@ -57,19 +55,39 @@ jobs:
             "${RTM_BASE_URL}/api/v2/test-execution/${EXECUTION_KEY}" \
             -o .rtm/execution.json
 
+          # Build TC -> TCE map: "ECS-63": "ECS-67-ECS-63"
+          jq --arg exec "$EXECUTION_KEY" '
+            (.testCaseExecutions // [])
+            | map(.testKey)
+            | map(select(startswith($exec + "-")))
+            | map({ (sub("^" + ($exec + "-"); "")) : . })
+            | add // {}
+          ' .rtm/execution.json > .rtm/tce_map.json
+
+          # Build grep (always write it; empty if no keys)
+          jq -r '
+            keys as $k
+            | if ($k | length) == 0 then ""
+              else "(" + (($k + ($k | map("@" + .))) | unique | join("|")) + ")"
+              end
+          ' .rtm/tce_map.json > .rtm/grep.txt
+
+          echo "=== map size ==="
+          jq 'length' .rtm/tce_map.json || true
+          echo "=== .rtm/grep.txt ==="
+          cat .rtm/grep.txt || true
+
       - name: print json because shit pmo
         if: always()
         run: |
           echo "=== .rtm/execution.json ==="
           head -n 200 .rtm/execution.json || true
-          echo ""      
-
+          echo ""
 
       - name: Debug list discovered tests
         run: npx playwright test --list
-  
 
-      # 2) Uruchom Playwright (filtrowanie jeśli grep jest zbudowany)
+      # 2) Run Playwright (filtering if grep exists)
       - name: Run Playwright (JUnit)
         env:
           ENVIRONMENT: ${{ inputs.environment }}
@@ -80,7 +98,11 @@ jobs:
           set -euo pipefail
           mkdir -p test-results
 
-          GREP="$(cat .rtm/grep.txt || true)"
+          GREP=""
+          if [ -f .rtm/grep.txt ]; then
+            GREP="$(cat .rtm/grep.txt || true)"
+          fi
+
           if [ -n "${GREP}" ]; then
             echo "Running Playwright with --grep '${GREP}'"
             npx playwright test --grep "${GREP}" --reporter=junit,line
@@ -95,20 +117,11 @@ jobs:
           ls -la test-results || true
           test -f test-results/results.xml && head -n 40 test-results/results.xml || true
 
-      # 3) Sparsuj JUnit i aktualizuj TCE wyniki w ISTNIEJĄCEJ egzekucji (ECS-67)
-      #
-      # UWAGA: payload do update bywa różny zależnie od wersji RTM.
-      # Ten krok próbuje po kolei kilka wariantów body:
-      #  - {"status":{"name":"Pass"}} / {"status":{"name":"Fail"}}
-      #  - {"resultStatus":{"name":"Pass"}} / ...
-      #  - {"result":{"name":"Pass"}} / ...
-      #
-      # Jeśli Twoje RTM oczekuje innych nazw (np. "PASSED"/"FAILED"), zmień RTM_PASS/RTM_FAIL poniżej.
+      # 3) Parse JUnit -> outcomes.json and update existing TCEs
       - name: Update RTM Test Case Executions from JUnit
         if: always()
         env:
           RTM_API_TOKEN: eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiI0OTIyNTkifQ.7Ne6V2Kn5t-KC-FLAWhMEH5xme1qSRCnH3OMT8x_6Ec1859lb1vgjDL8dIzaure7
-          EXECUTION_KEY: ${{ inputs.executionKey }}
           RTM_PASS: Pass
           RTM_FAIL: Fail
         run: |
@@ -119,37 +132,16 @@ jobs:
             exit 0
           fi
 
-          # Build results map: TestCaseKey -> PASS/FAIL
-          echo "Building mapping + grep pattern from execution.json"
-
-          # Build TC -> TCE map:
-          # "ECS-63": "ECS-67-ECS-63"
-          jq --arg exec "$EXECUTION_KEY" '
-          (.testCaseExecutions // [])
-          | map(.testKey)
-          | map(select(startswith($exec + "-")))
-          | map({ (sub("^" + ($exec + "-"); "")) : . })
-          | add // {}
-          ' .rtm/execution.json > .rtm/tce_map.json
-
-          # Build grep from TC keys (ECS-63 etc.) and @ECS-63
-          if [ "$(jq 'length' .rtm/tce_map.json)" -gt 0 ]; then
-          jq -r '
-          keys as $k
-          | ($k + ($k | map("@" + .)))
-          | unique
-          | "(" + (join("|")) + ")"
-          ' .rtm/tce_map.json > .rtm/grep.txt
-          else
-          echo "" > .rtm/grep.txt
+          if [ ! -f .rtm/tce_map.json ]; then
+            echo "Missing .rtm/tce_map.json (mapping). Failing."
+            exit 1
           fi
 
           python3 scripts/rtm_extract_outcomes.py
+
           echo "Outcomes extracted from JUnit:"
           cat .rtm/outcomes.json || true
 
-          # For each TestCaseKey outcome, update its TCE (if mapping exists)
-          # We attempt multiple payload shapes to match your RTM version.
           jq -r 'to_entries[] | "\(.key) \(.value)"' .rtm/outcomes.json | while read -r TC_KEY OUTCOME; do
             TCE_KEY="$(jq -r --arg k "$TC_KEY" '.[$k] // empty' .rtm/tce_map.json)"
             if [ -z "$TCE_KEY" ] || [ "$TCE_KEY" = "null" ]; then
@@ -163,19 +155,18 @@ jobs:
               STATUS_NAME="${RTM_FAIL}"
             fi
 
+            URL="${RTM_BASE_URL}/api/v2/test-case-execution/${TCE_KEY}"
             echo "Updating TCE=${TCE_KEY} (from TC=${TC_KEY}) => ${STATUS_NAME}"
 
-            URL="${RTM_BASE_URL}/api/v2/test-case-execution/${TCE_KEY}"
-
-            # Try payload #1: status.name
+            # Try payload #1: result.name
             CODE="$(curl -sS -o /tmp/rtm_resp.json -w "%{http_code}" \
               -X PUT \
               -H "Authorization: Bearer ${RTM_API_TOKEN}" \
               -H "Content-Type: application/json" \
-              -d "{\"status\":{\"name\":\"${STATUS_NAME}\"}}" \
+              -d "{\"result\":{\"name\":\"${STATUS_NAME}\"}}" \
               "${URL}" || true)"
             if [ "$CODE" = "200" ] || [ "$CODE" = "204" ]; then
-              echo "OK (status.name) ${TCE_KEY}"
+              echo "OK (result.name) ${TCE_KEY}"
               continue
             fi
 
@@ -191,15 +182,15 @@ jobs:
               continue
             fi
 
-            # Try payload #3: result.name
+            # Try payload #3: status.name (fallback)
             CODE="$(curl -sS -o /tmp/rtm_resp.json -w "%{http_code}" \
               -X PUT \
               -H "Authorization: Bearer ${RTM_API_TOKEN}" \
               -H "Content-Type: application/json" \
-              -d "{\"result\":{\"name\":\"${STATUS_NAME}\"}}" \
+              -d "{\"status\":{\"name\":\"${STATUS_NAME}\"}}" \
               "${URL}" || true)"
             if [ "$CODE" = "200" ] || [ "$CODE" = "204" ]; then
-              echo "OK (result.name) ${TCE_KEY}"
+              echo "OK (status.name) ${TCE_KEY}"
               continue
             fi
 
@@ -208,7 +199,6 @@ jobs:
             echo ""
           done
 
-      # (Opcjonalnie) wrzuć JUnit jako artifact do GitHuba
       - name: Upload JUnit artifact
         if: always()
         uses: actions/upload-artifact@v4
