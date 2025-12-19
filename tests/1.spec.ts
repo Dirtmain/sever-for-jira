@@ -5,7 +5,7 @@ test.describe('@ECS-41', () => {
     await page.goto('https://playwright.dev/');
 
     // Expect a title "to contain" a substring.
-    await expect(page).toHaveTitle(/Playwright/);
+    await expect(page).toHaveTitle(/Plawright/);
   });
 
   test('get started link', async ({ page }) => {
