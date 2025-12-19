@@ -117,6 +117,16 @@ jobs:
           ls -la test-results || true
           test -f test-results/results.xml && head -n 40 test-results/results.xml || true
 
+
+      - name: Package report for RTM attachment
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .rtm
+          zip -j .rtm/junit-results.zip test-results/results.xml
+          ls -la .rtm/junit-results.zip
+
+
       # 3) Parse JUnit -> outcomes.json and update existing TCEs
       - name: Update RTM Test Case Executions from JUnit
         if: always()
@@ -167,6 +177,13 @@ jobs:
               "${URL}" || true)"
             if [ "$CODE" = "200" ] || [ "$CODE" = "204" ]; then
               echo "OK (result.name) ${TCE_KEY}"
+              echo "Attaching report to ${TCE_KEY}..."
+              curl -sS -f \
+                -X POST \
+                -H "Authorization: Bearer ${RTM_API_TOKEN}" \
+                -F "file=@.rtm/junit-results.zip" \
+                "${RTM_BASE_URL}/api/v2/test-case-execution/${TCE_KEY}/attachment" \
+                || echo "WARN: attachment failed for ${TCE_KEY}"
               continue
             fi
 
