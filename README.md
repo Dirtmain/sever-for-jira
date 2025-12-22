@@ -1,1 +1,5 @@
-https://open.spotify.com/album/0ZyoyTZbl3g0IwkNlpg633?si=Ngw4OAwkSIyyyRrh_lsLaQ
+Requiered info:
+RTM Base url
+RTM api
+Project key
+To change tenant options go to line 17
