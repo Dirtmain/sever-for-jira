@@ -77,13 +77,6 @@ jobs:
           echo "=== .rtm/grep.txt ==="
           cat .rtm/grep.txt || true
 
-      - name: print json because shit pmo
-        if: always()
-        run: |
-          echo "=== .rtm/execution.json ==="
-          head -n 200 .rtm/execution.json || true
-          echo ""
-
       - name: Debug list discovered tests
         run: npx playwright test --list
 
