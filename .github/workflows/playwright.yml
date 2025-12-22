@@ -1,90 +1,217 @@
-name: Playwright + RTM Import
+name: Playwright -> Update existing RTM Test Execution
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      executionKey:
+        description: "Existing RTM Test Execution key (np. ECS-67)"
+        required: true
+      environment:
+        description: "Środowisko"
+        type: choice
+        options: [TEST, PROD]
+        required: true
+      tenant:
+        description: "Tenant"
+        type: choice
+        options: [BYDGOSZCZ, GRUDZIADZ, TORUN]
+        required: true
 
 jobs:
-  test:
+  e2e:
     runs-on: ubuntu-latest
 
+    env:
+      RTM_BASE_URL: https://rtm-eu-api.hexygen.com
+      RTM_PROJECT_KEY: ECS
+      CI: true
+
     steps:
-      # Checkout project
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Set up Node
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # Install deps + Playwright
-      - name: Install dependencies
+      - name: Install dependencies + Playwright
         run: |
           npm ci
           npx playwright install --with-deps
 
-      # Run Playwright with JUnit reporter
-      - name: Run Playwright tests
-        run: |
-          npx playwright test 
+      # 1) Download Test Execution JSON + build mapping + build grep
+      - name: Fetch RTM execution + build TCE mapping + grep
         env:
-          CI: true
-
-      - name: Check contents of test-results after Playwright tests
+          RTM_API_TOKEN: ${{ secrets.RTM_API_TOKEN }}
+          EXECUTION_KEY: ${{ inputs.executionKey }}
         run: |
-          echo "Listing contents of test-results:"
-          ls -la ./test-results
+          set -euo pipefail
+          mkdir -p .rtm
 
+          echo "Downloading Test Execution: ${EXECUTION_KEY}"
+          curl -sS -f \
+            -H "Authorization: Bearer ${RTM_API_TOKEN}" \
+            "${RTM_BASE_URL}/api/v2/test-execution/${EXECUTION_KEY}" \
+            -o .rtm/execution.json
 
-      - name: Archive JUnit results
-        run: |
-          # Debugging output to check files
-          echo "Listing contents of current directory:"
-          ls -la
-          
-          echo "Listing contents of test-results directory:"
-          ls -la ./test-results
-          
-          echo "Searching for results.xml in the root directory:"
-          find . -name "results.xml" -type f
-          
-          # Create archive folder if it doesn't exist
-          mkdir -p rtm-archive
-          
-          # Copy XML files from the root directory or test-results
-          cp ./results.xml rtm-archive/ || echo "No XML files found in root directory"
-          cp ./test-results/results.xml rtm-archive/ || echo "No XML files found in test-results"
-          
-          # Create the ZIP archive
-          cd rtm-archive
-          zip -r ../rtm-results.zip .
-          
-          # Show the archive details
-          echo "Archive created:"
-          ls -lh ../rtm-results.zip
+          # Build TC -> TCE map: "ECS-63": "ECS-67-ECS-63"
+          jq --arg exec "$EXECUTION_KEY" '
+            (.testCaseExecutions // [])
+            | map(.testKey)
+            | map(select(startswith($exec + "-")))
+            | map({ (sub("^" + ($exec + "-"); "")) : . })
+            | add // {}
+          ' .rtm/execution.json > .rtm/tce_map.json
 
+          # Build grep (always write it; empty if no keys)
+          jq -r '
+            keys as $k
+            | if ($k | length) == 0 then ""
+              else "(" + (($k + ($k | map("@" + .))) | unique | join("|")) + ")"
+              end
+          ' .rtm/tce_map.json > .rtm/grep.txt
 
+          echo "=== map size ==="
+          jq 'length' .rtm/tce_map.json || true
+          echo "=== .rtm/grep.txt ==="
+          cat .rtm/grep.txt || true
 
-      # Upload to Deviniti RTM
-      - name: Upload test results to RTM
-        run: |
-          echo "Uploading results to RTM…"
+      - name: Debug list discovered tests
+        run: npx playwright test --list
 
-          curl -X POST "https://rtm-eu-api.hexygen.com/api/v2/automation/import-test-results" \
-            -H "Authorization: Bearer $RTM_API_TOKEN" \
-            -F "projectKey=$RTM_PROJECT_KEY" \
-            -F "file=@rtm-results.zip" \
-            -F "reportType=JUNIT" \
-            -F "name=Playwright Results $(date +'%Y-%m-%d %H:%M')" \
-            -F 'treePath=/Automatic/e2e/moduleA'\
-            -F "jobUrl=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"\
-            -F 'testExecutionFields={ "fields": {"labels" : ["e2etest"]} }' \
-            -F 'testCaseFields={"fields": {"labels": ["automated", "regression"]}}'
-
+      # 2) Run Playwright (filtering if grep exists)
+      - name: Run Playwright (JUnit)
         env:
-          RTM_BASE_URL: https://rtm-eu-api.hexygen.com/api
-          RTM_API_TOKEN: eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiI0OTIyNTkifQ.7Ne6V2Kn5t-KC-FLAWhMEH5xme1qSRCnH3OMT8x_6Ec1859lb1vgjDL8dIzaure7
-          RTM_PROJECT_KEY: ECS
+          ENVIRONMENT: ${{ inputs.environment }}
+          TENANT: ${{ inputs.tenant }}
+          PLAYWRIGHT_JUNIT_OUTPUT_DIR: test-results
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+
+          GREP=""
+          if [ -f .rtm/grep.txt ]; then
+            GREP="$(cat .rtm/grep.txt || true)"
+          fi
+
+          if [ -n "${GREP}" ]; then
+            echo "Running Playwright with --grep '${GREP}'"
+            npx playwright test --grep "${GREP}" --reporter=junit,line
+          else
+            echo "No grep built from RTM execution; running full test suite"
+            npx playwright test --reporter=junit,line
+          fi
+
+      - name: Show JUnit file
+        if: always()
+        run: |
+          ls -la test-results || true
+          test -f test-results/results.xml && head -n 40 test-results/results.xml || true
+
+
+      - name: Package report for RTM attachment
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .rtm
+          zip -j .rtm/junit-results.zip test-results/results.xml
+          ls -la .rtm/junit-results.zip
+
+
+      # 3) Parse JUnit -> outcomes.json and update existing TCEs
+      - name: Update RTM Test Case Executions from JUnit
+        if: always()
+        env:
+          RTM_API_TOKEN: ${{ secrets.RTM_API_TOKEN }}
+          RTM_PASS: Pass
+          RTM_FAIL: Fail
+        run: |
+          set -euo pipefail
+
+          if [ ! -f test-results/results.xml ]; then
+            echo "No JUnit file found (test-results/results.xml). Skipping RTM update."
+            exit 0
+          fi
+
+          if [ ! -f .rtm/tce_map.json ]; then
+            echo "Missing .rtm/tce_map.json (mapping). Failing."
+            exit 1
+          fi
+
+          python3 scripts/rtm_extract_outcomes.py
+
+          echo "Outcomes extracted from JUnit:"
+          cat .rtm/outcomes.json || true
+
+          jq -r 'to_entries[] | "\(.key) \(.value)"' .rtm/outcomes.json | while read -r TC_KEY OUTCOME; do
+            TCE_KEY="$(jq -r --arg k "$TC_KEY" '.[$k] // empty' .rtm/tce_map.json)"
+            if [ -z "$TCE_KEY" ] || [ "$TCE_KEY" = "null" ]; then
+              echo "WARN: No TCE mapping for TC=${TC_KEY}. Skipping."
+              continue
+            fi
+
+            if [ "$OUTCOME" = "PASS" ]; then
+              STATUS_NAME="${RTM_PASS}"
+            else
+              STATUS_NAME="${RTM_FAIL}"
+            fi
+
+            URL="${RTM_BASE_URL}/api/v2/test-case-execution/${TCE_KEY}"
+            echo "Updating TCE=${TCE_KEY} (from TC=${TC_KEY}) => ${STATUS_NAME}"
+
+            # Try payload #1: result.name
+            CODE="$(curl -sS -o /tmp/rtm_resp.json -w "%{http_code}" \
+              -X PUT \
+              -H "Authorization: Bearer ${RTM_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"result\":{\"name\":\"${STATUS_NAME}\"}}" \
+              "${URL}" || true)"
+            if [ "$CODE" = "200" ] || [ "$CODE" = "204" ]; then
+              echo "OK (result.name) ${TCE_KEY}"
+              echo "Attaching report to ${TCE_KEY}..."
+              curl -sS -f \
+                -X POST \
+                -H "Authorization: Bearer ${RTM_API_TOKEN}" \
+                -F "file=@.rtm/junit-results.zip" \
+                "${RTM_BASE_URL}/api/v2/test-case-execution/${TCE_KEY}/attachment" \
+                || echo "WARN: attachment failed for ${TCE_KEY}"
+              continue
+            fi
+
+            # Try payload #2: resultStatus.name
+            CODE="$(curl -sS -o /tmp/rtm_resp.json -w "%{http_code}" \
+              -X PUT \
+              -H "Authorization: Bearer ${RTM_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"resultStatus\":{\"name\":\"${STATUS_NAME}\"}}" \
+              "${URL}" || true)"
+            if [ "$CODE" = "200" ] || [ "$CODE" = "204" ]; then
+              echo "OK (resultStatus.name) ${TCE_KEY}"
+              continue
+            fi
+
+            # Try payload #3: status.name (fallback)
+            CODE="$(curl -sS -o /tmp/rtm_resp.json -w "%{http_code}" \
+              -X PUT \
+              -H "Authorization: Bearer ${RTM_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"status\":{\"name\":\"${STATUS_NAME}\"}}" \
+              "${URL}" || true)"
+            if [ "$CODE" = "200" ] || [ "$CODE" = "204" ]; then
+              echo "OK (status.name) ${TCE_KEY}"
+              continue
+            fi
+
+            echo "ERROR: Could not update TCE=${TCE_KEY}. HTTP=${CODE}. Response:"
+            cat /tmp/rtm_resp.json || true
+            echo ""
+          done
+
+      - name: Upload JUnit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: test-results/results.xml
